@@ -1,4 +1,7 @@
 let fuse;
+let preparedData = [];
+let activeSuggestions = [];
+let activeSuggestionIndex = -1;
 
 function normalizeText(text) {
   return (text || "")
@@ -11,22 +14,32 @@ function normalizeText(text) {
 }
 
 function enrichData(items) {
-  return items.map((item) => ({
-    ...item,
-    searchableText: normalizeText([
+  return items.map((item) => {
+    const aliases = Array.isArray(item.aliases) ? item.aliases : [];
+    const searchableText = normalizeText([
       item.title || "",
       item.problem || "",
       item.solution || "",
       ...(item.steps || []),
-      ...(item.aliases || [])
-    ].join(" "))
-  }));
+      ...aliases
+    ].join(" "));
+
+    return {
+      ...item,
+      aliases,
+      searchableText,
+      suggestionPool: [
+        item.title || "",
+        ...aliases
+      ].filter(Boolean)
+    };
+  });
 }
 
 function initFuse() {
-  const preparedData = enrichData(data);
+  preparedData = enrichData(data);
 
-  const options = {
+  fuse = new Fuse(preparedData, {
     includeScore: true,
     includeMatches: true,
     shouldSort: true,
@@ -42,9 +55,7 @@ function initFuse() {
       { name: "steps", weight: 0.12 },
       { name: "aliases", weight: 0.10 }
     ]
-  };
-
-  fuse = new Fuse(preparedData, options);
+  });
 }
 
 function escapeHtml(text) {
@@ -115,7 +126,7 @@ function decideAnswer(question, results) {
     }
   }
 
-  const fallback = data
+  const fallback = preparedData
     .map(item => ({
       item,
       keywordScore: getKeywordScore(question, item)
@@ -155,10 +166,107 @@ function clearSuggestions() {
   const suggestionsBox = document.getElementById("suggestions-box");
   suggestionsBox.innerHTML = "";
   suggestionsBox.classList.add("hidden");
+  activeSuggestions = [];
+  activeSuggestionIndex = -1;
+}
+
+function buildSuggestionCandidates(query) {
+  const normalizedQuery = normalizeText(query);
+  const words = normalizedQuery.split(" ").filter(w => w.length > 1);
+  const suggestionsMap = new Map();
+
+  if (!normalizedQuery) return [];
+
+  preparedData.forEach((item) => {
+    let bestLabel = item.title;
+    let bestScore = 0;
+
+    item.suggestionPool.forEach((candidate) => {
+      const candidateNorm = normalizeText(candidate);
+      let score = 0;
+
+      if (candidateNorm.includes(normalizedQuery)) {
+        score += 12;
+      }
+
+      words.forEach(word => {
+        if (candidateNorm.includes(word)) score += 4;
+      });
+
+      if (normalizeText(item.title).includes(normalizedQuery)) {
+        score += 6;
+      }
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestLabel = candidate;
+      }
+    });
+
+    if (bestScore > 0) {
+      const key = item.title;
+      if (!suggestionsMap.has(key) || suggestionsMap.get(key).score < bestScore) {
+        suggestionsMap.set(key, {
+          title: item.title,
+          label: bestLabel,
+          score: bestScore
+        });
+      }
+    }
+  });
+
+  const fuseResults = fuse.search(query).slice(0, 5);
+  fuseResults.forEach((result, index) => {
+    const item = result.item;
+    const key = item.title;
+    const fuseScore = (1 - (result.score ?? 1)) * 10 + (5 - index);
+
+    if (!suggestionsMap.has(key) || suggestionsMap.get(key).score < fuseScore) {
+      suggestionsMap.set(key, {
+        title: item.title,
+        label: item.title,
+        score: fuseScore
+      });
+    }
+  });
+
+  return Array.from(suggestionsMap.values())
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 5);
+}
+
+function renderSuggestions() {
+  const suggestionsBox = document.getElementById("suggestions-box");
+
+  if (!activeSuggestions.length) {
+    clearSuggestions();
+    return;
+  }
+
+  suggestionsBox.innerHTML = activeSuggestions
+    .map((item, index) => {
+      const isActive = index === activeSuggestionIndex ? " active" : "";
+      return `
+        <div class="suggestion-item${isActive}" data-index="${index}">
+          <div class="suggestion-title">${escapeHtml(item.label)}</div>
+          <div class="suggestion-subtitle">${escapeHtml(item.title)}</div>
+        </div>
+      `;
+    })
+    .join("");
+
+  suggestionsBox.classList.remove("hidden");
+
+  document.querySelectorAll(".suggestion-item").forEach((element) => {
+    element.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      const index = Number(element.getAttribute("data-index"));
+      applySuggestion(index, true);
+    });
+  });
 }
 
 function showSuggestions(query) {
-  const suggestionsBox = document.getElementById("suggestions-box");
   const cleanQuery = query.trim();
 
   if (!cleanQuery) {
@@ -166,30 +274,44 @@ function showSuggestions(query) {
     return;
   }
 
-  const results = fuse.search(cleanQuery).slice(0, 5);
+  activeSuggestions = buildSuggestionCandidates(cleanQuery);
+  activeSuggestionIndex = activeSuggestions.length ? 0 : -1;
+  renderSuggestions();
+}
 
-  if (!results.length) {
-    clearSuggestions();
-    return;
+function applySuggestion(index, submitImmediately = true) {
+  if (index < 0 || index >= activeSuggestions.length) return;
+
+  const selected = activeSuggestions[index];
+  const input = document.getElementById("question-input");
+
+  input.value = selected.label || selected.title;
+  clearSuggestions();
+  input.focus();
+
+  if (submitImmediately) {
+    handleQuestion();
+  }
+}
+
+function moveSuggestionSelection(direction) {
+  if (!activeSuggestions.length) return;
+
+  if (activeSuggestionIndex === -1) {
+    activeSuggestionIndex = 0;
+  } else {
+    activeSuggestionIndex += direction;
+
+    if (activeSuggestionIndex < 0) {
+      activeSuggestionIndex = activeSuggestions.length - 1;
+    }
+
+    if (activeSuggestionIndex >= activeSuggestions.length) {
+      activeSuggestionIndex = 0;
+    }
   }
 
-  suggestionsBox.innerHTML = results
-    .map(result => {
-      const title = result.item.title;
-      return `<div class="suggestion-item" data-title="${escapeHtml(title)}">${escapeHtml(title)}</div>`;
-    })
-    .join("");
-
-  suggestionsBox.classList.remove("hidden");
-
-  document.querySelectorAll(".suggestion-item").forEach(item => {
-    item.addEventListener("click", () => {
-      const selected = item.getAttribute("data-title");
-      document.getElementById("question-input").value = selected;
-      clearSuggestions();
-      document.getElementById("question-input").focus();
-    });
-  });
+  renderSuggestions();
 }
 
 function handleQuestion() {
@@ -236,17 +358,56 @@ window.addEventListener("DOMContentLoaded", () => {
   initFuse();
 
   document.getElementById("ask-btn").addEventListener("click", handleQuestion);
+  document.getElementById("clear-btn").addEventListener("click", resetChat);
 
-  document.getElementById("question-input").addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      handleQuestion();
-    }
-  });
+  const input = document.getElementById("question-input");
 
-  document.getElementById("question-input").addEventListener("input", (e) => {
+  input.addEventListener("input", (e) => {
     showSuggestions(e.target.value);
   });
 
-  document.getElementById("clear-btn").addEventListener("click", resetChat);
+  input.addEventListener("keydown", (e) => {
+    if (!activeSuggestions.length) {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        handleQuestion();
+      }
+      return;
+    }
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      moveSuggestionSelection(1);
+      return;
+    }
+
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      moveSuggestionSelection(-1);
+      return;
+    }
+
+    if (e.key === "Enter") {
+      e.preventDefault();
+      if (activeSuggestionIndex >= 0) {
+        applySuggestion(activeSuggestionIndex, true);
+      } else {
+        handleQuestion();
+      }
+      return;
+    }
+
+    if (e.key === "Escape") {
+      clearSuggestions();
+    }
+  });
+
+  document.addEventListener("click", (e) => {
+    const suggestionsBox = document.getElementById("suggestions-box");
+    const composerArea = document.getElementById("composer-area");
+
+    if (!composerArea.contains(e.target) && !suggestionsBox.contains(e.target)) {
+      clearSuggestions();
+    }
+  });
 });
