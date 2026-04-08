@@ -1,38 +1,60 @@
-/*
- * Lógica principal do assistente Business Central.
- * Este ficheiro carrega a base de conhecimento, inicializa o motor Fuse.js
- * para fuzzy search e gere a interface de perguntas/respostas.
- */
+// app.js
 
-// Inicializa Fuse.js com a base de conhecimento carregada em data.js
 let fuse;
 
+function normalizeText(text) {
+  return (text || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\w\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function enrichData(items) {
+  return items.map((item) => ({
+    ...item,
+    searchableText: normalizeText([
+      item.title || "",
+      item.problem || "",
+      item.solution || "",
+      ...(item.steps || []),
+      ...(item.aliases || [])
+    ].join(" "))
+  }));
+}
+
 function initFuse() {
+  const preparedData = enrichData(data);
+
   const options = {
     includeScore: true,
     includeMatches: true,
     shouldSort: true,
     isCaseSensitive: false,
     ignoreLocation: true,
+    ignoreFieldNorm: false,
+    threshold: 0.55,
     minMatchCharLength: 2,
-    threshold: 0.35,
     keys: [
-      { name: "title", weight: 0.35 },
-      { name: "problem", weight: 0.35 },
-      { name: "solution", weight: 0.2 },
-      { name: "steps", weight: 0.08 },
-      { name: "aliases", weight: 0.02 }
+      { name: "title", weight: 0.30 },
+      { name: "problem", weight: 0.30 },
+      { name: "solution", weight: 0.18 },
+      { name: "steps", weight: 0.12 },
+      { name: "aliases", weight: 0.10 }
     ]
   };
-  fuse = new Fuse(data, options);
+
+  fuse = new Fuse(preparedData, options);
 }
 
-// Formata uma resposta estruturada com título, problema, solução e passos
 function formatAnswer(item, confidenceLabel) {
-  let html = `<div class="message answer">`;
+  let html = "";
   html += `<h4>${item.title}</h4>`;
   html += `<p><strong>Problema:</strong> ${item.problem}</p>`;
   html += `<p><strong>Solução:</strong> ${item.solution}</p>`;
+
   if (item.steps && item.steps.length) {
     html += `<p><strong>Como proceder:</strong></p><ul>`;
     item.steps.forEach(step => {
@@ -40,29 +62,80 @@ function formatAnswer(item, confidenceLabel) {
     });
     html += `</ul>`;
   }
+
   if (confidenceLabel) {
     html += `<p><em>Confiança: ${confidenceLabel}</em></p>`;
   }
-  html += `</div>`;
+
   return html;
 }
 
-// Decide se deve responder automaticamente ou sugerir alternativas
-function decideAnswer(results) {
-  if (!results || !results.length) return { mode: "nohit" };
-  const top = results[0];
-  const second = results.length > 1 ? results[1] : null;
-  const score = top.score != null ? top.score : 1;
-  const gap = second ? (second.score - score) : 1;
-  // Score baixo (confiança alta)
-  if (score <= 0.25) return { mode: "answer", item: top.item, confidence: "alta" };
-  // Score aceitável e diferença visível para segundo
-  if (score <= 0.38 && gap >= 0.05) return { mode: "answer", item: top.item, confidence: "média" };
-  // Caso contrário sugerir
-  return { mode: "suggest", suggestions: results.slice(0, 3).map(r => r.item) };
+function getKeywordScore(question, item) {
+  const q = normalizeText(question);
+  const text = item.searchableText || "";
+  const words = q.split(" ").filter(w => w.length > 2);
+
+  let matches = 0;
+  words.forEach(word => {
+    if (text.includes(word)) {
+      matches++;
+    }
+  });
+
+  return matches;
 }
 
-// Adiciona mensagem ao chat (pergunta ou resposta)
+function decideAnswer(question, results) {
+  if (results && results.length > 0) {
+    const top = results[0];
+    const second = results[1] || null;
+    const score = top.score ?? 1;
+    const gap = second ? second.score - score : 1;
+
+    if (score <= 0.28) {
+      return { mode: "answer", item: top.item, confidence: "alta" };
+    }
+
+    if (score <= 0.48 && gap >= 0.03) {
+      return { mode: "answer", item: top.item, confidence: "média" };
+    }
+
+    if (score <= 0.62) {
+      return {
+        mode: "suggest",
+        suggestions: results.slice(0, 3).map(r => r.item)
+      };
+    }
+  }
+
+  const fallback = data
+    .map(item => ({
+      item,
+      keywordScore: getKeywordScore(question, item)
+    }))
+    .sort((a, b) => b.keywordScore - a.keywordScore);
+
+  if (fallback[0] && fallback[0].keywordScore >= 2) {
+    return {
+      mode: "answer",
+      item: fallback[0].item,
+      confidence: "aproximada"
+    };
+  }
+
+  if (fallback[0] && fallback[0].keywordScore >= 1) {
+    return {
+      mode: "suggest",
+      suggestions: fallback
+        .filter(x => x.keywordScore >= 1)
+        .slice(0, 3)
+        .map(x => x.item)
+    };
+  }
+
+  return { mode: "nohit" };
+}
+
 function addMessage(content, type = "answer") {
   const chatArea = document.getElementById("chat-area");
   const div = document.createElement("div");
@@ -71,34 +144,33 @@ function addMessage(content, type = "answer") {
   chatArea.appendChild(div);
 }
 
-// Responde à pergunta introduzida
 function handleQuestion() {
   const input = document.getElementById("question-input");
   const question = input.value.trim();
+
   if (!question) return;
-  // Se histórico está ativado, mostrar a pergunta no chat
+
   addMessage(question, "question");
-  // Fazer pesquisa
-  const results = fuse.search(question);
-  const decision = decideAnswer(results);
-  // Esconder avatar e mostrar chat area
+
   document.getElementById("alberto").style.display = "none";
   document.getElementById("chat-area").classList.remove("hidden");
+
+  const results = fuse.search(question);
+  const decision = decideAnswer(question, results);
+
   if (decision.mode === "answer") {
-    const answerHtml = formatAnswer(decision.item, decision.confidence);
-    addMessage(answerHtml, "answer");
+    addMessage(formatAnswer(decision.item, decision.confidence), "answer");
   } else if (decision.mode === "suggest") {
-    // Criar bloco de sugestões
-    let html = `<div class="message answer"><p>Não encontrei uma resposta exata. Queres dizer:</p><ul>`;
+    let html = `<p>Não encontrei uma correspondência exata. Talvez queiras dizer:</p><ul>`;
     decision.suggestions.forEach(item => {
       html += `<li><strong>${item.title}</strong></li>`;
     });
-    html += `</ul><p>Tenta reformular a pergunta.</p></div>`;
+    html += `</ul><p>Tenta reformular com outras palavras.</p>`;
     addMessage(html, "answer");
   } else {
-    addMessage(`<p>Não encontrei nenhuma correspondência.</p>`, "answer");
+    addMessage(`<p>Não encontrei nenhuma correspondência relevante.</p>`, "answer");
   }
-  // Limpar input
+
   input.value = "";
 }
 
@@ -110,16 +182,17 @@ function resetChat() {
   document.getElementById("question-input").value = "";
 }
 
-// Event listeners
 window.addEventListener("DOMContentLoaded", () => {
-  // Inicializar Fuse apenas quando data estiver carregada
   initFuse();
+
   document.getElementById("ask-btn").addEventListener("click", handleQuestion);
+
   document.getElementById("question-input").addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
       e.preventDefault();
       handleQuestion();
     }
   });
+
   document.getElementById("clear-btn").addEventListener("click", resetChat);
 });
