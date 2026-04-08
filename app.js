@@ -1,5 +1,3 @@
-// app.js
-
 let fuse;
 
 function normalizeText(text) {
@@ -49,22 +47,31 @@ function initFuse() {
   fuse = new Fuse(preparedData, options);
 }
 
+function escapeHtml(text) {
+  return (text || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 function formatAnswer(item, confidenceLabel) {
   let html = "";
-  html += `<h4>${item.title}</h4>`;
-  html += `<p><strong>Problema:</strong> ${item.problem}</p>`;
-  html += `<p><strong>Solução:</strong> ${item.solution}</p>`;
+  html += `<h4>${escapeHtml(item.title)}</h4>`;
+  html += `<p><strong>Problema:</strong> ${escapeHtml(item.problem)}</p>`;
+  html += `<p><strong>Solução:</strong> ${escapeHtml(item.solution)}</p>`;
 
   if (item.steps && item.steps.length) {
     html += `<p><strong>Como proceder:</strong></p><ul>`;
     item.steps.forEach(step => {
-      html += `<li>${step}</li>`;
+      html += `<li>${escapeHtml(step)}</li>`;
     });
     html += `</ul>`;
   }
 
   if (confidenceLabel) {
-    html += `<p><em>Confiança: ${confidenceLabel}</em></p>`;
+    html += `<p><em>Confiança: ${escapeHtml(confidenceLabel)}</em></p>`;
   }
 
   return html;
@@ -144,13 +151,54 @@ function addMessage(content, type = "answer") {
   chatArea.appendChild(div);
 }
 
+function clearSuggestions() {
+  const suggestionsBox = document.getElementById("suggestions-box");
+  suggestionsBox.innerHTML = "";
+  suggestionsBox.classList.add("hidden");
+}
+
+function showSuggestions(query) {
+  const suggestionsBox = document.getElementById("suggestions-box");
+  const cleanQuery = query.trim();
+
+  if (!cleanQuery) {
+    clearSuggestions();
+    return;
+  }
+
+  const results = fuse.search(cleanQuery).slice(0, 5);
+
+  if (!results.length) {
+    clearSuggestions();
+    return;
+  }
+
+  suggestionsBox.innerHTML = results
+    .map(result => {
+      const title = result.item.title;
+      return `<div class="suggestion-item" data-title="${escapeHtml(title)}">${escapeHtml(title)}</div>`;
+    })
+    .join("");
+
+  suggestionsBox.classList.remove("hidden");
+
+  document.querySelectorAll(".suggestion-item").forEach(item => {
+    item.addEventListener("click", () => {
+      const selected = item.getAttribute("data-title");
+      document.getElementById("question-input").value = selected;
+      clearSuggestions();
+      document.getElementById("question-input").focus();
+    });
+  });
+}
+
 function handleQuestion() {
   const input = document.getElementById("question-input");
   const question = input.value.trim();
 
   if (!question) return;
 
-  addMessage(question, "question");
+  addMessage(escapeHtml(question), "question");
 
   document.getElementById("alberto").style.display = "none";
   document.getElementById("chat-area").classList.remove("hidden");
@@ -163,7 +211,7 @@ function handleQuestion() {
   } else if (decision.mode === "suggest") {
     let html = `<p>Não encontrei uma correspondência exata. Talvez queiras dizer:</p><ul>`;
     decision.suggestions.forEach(item => {
-      html += `<li><strong>${item.title}</strong></li>`;
+      html += `<li><strong>${escapeHtml(item.title)}</strong></li>`;
     });
     html += `</ul><p>Tenta reformular com outras palavras.</p>`;
     addMessage(html, "answer");
@@ -172,6 +220,7 @@ function handleQuestion() {
   }
 
   input.value = "";
+  clearSuggestions();
 }
 
 function resetChat() {
@@ -180,6 +229,7 @@ function resetChat() {
   chatArea.classList.add("hidden");
   document.getElementById("alberto").style.display = "block";
   document.getElementById("question-input").value = "";
+  clearSuggestions();
 }
 
 window.addEventListener("DOMContentLoaded", () => {
@@ -192,6 +242,10 @@ window.addEventListener("DOMContentLoaded", () => {
       e.preventDefault();
       handleQuestion();
     }
+  });
+
+  document.getElementById("question-input").addEventListener("input", (e) => {
+    showSuggestions(e.target.value);
   });
 
   document.getElementById("clear-btn").addEventListener("click", resetChat);
