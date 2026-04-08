@@ -1,0 +1,105 @@
+/*
+ * Estilos base para o assistente Business Central.
+ * Este ficheiro define o layout simples com avatar, área de chat e campo de input.
+ */
+
+body {
+  font-family: Arial, Helvetica, sans-serif;
+  background-color: #f3f4f6;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+}
+
+#chat-wrapper {
+  width: 100%;
+  max-width: 640px;
+  background-color: #ffffff;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+/* Avatar no topo */
+#avatar-container {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+#avatar-container img {
+  width: 150px;
+  height: auto;
+}
+
+/* Área de chat onde surgem as respostas */
+#chat-area {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.hidden {
+  display: none;
+}
+
+/* Mensagens de utilizador e assistente */
+.message {
+  padding: 12px 16px;
+  border-radius: 8px;
+  max-width: 100%;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.message.question {
+  align-self: flex-end;
+  background-color: #dbeafe;
+  color: #1e3a8a;
+}
+
+.message.answer {
+  align-self: flex-start;
+  background-color: #f0fdf4;
+  color: #064e3b;
+}
+
+/* Input e botões */
+#input-container {
+  display: flex;
+  gap: 8px;
+}
+
+#question-input {
+  flex: 1;
+  padding: 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+button {
+  padding: 10px 16px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #fff;
+}
+
+/* Cores para os botões */
+#ask-btn {
+  background-color: #2563eb;
+}
+
+#clear-btn {
+  background-color: #64748b;
+}
+
+button:hover {
+  opacity: 0.9;
+}
