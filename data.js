@@ -621,5 +621,32 @@ const data = [
       "get status ws",
       "the job update order status scheduled by"
     ]
+  },
+  {
+    title: "Atualização de dados 2Logical",
+    problem: "Falta enviar os dados à 2Logical, sendo que este envio deve ser realizado no início de cada mês.",
+    solution: "Efetuar o envio dos dados através do servidor NAVAPP01 executando a aplicação da 2logical.",
+    steps: [
+      "Entrar no servidor NAVAPP01 via ligação ao ambiente de trabalho remoto.",
+      "Aceder ao disco local C.",
+      "Entrar na pasta 2Logical_AP ou 2Logical_MDS.",
+      "Procurar a aplicação dentro da pasta.",
+      "Executar a aplicação.",
+      "Repetir o processo para uma ou ambas as empresas, se necessário."
+    ],
+    aliases: [
+      "2logical",
+      "envio 2logical",
+      "atualizar 2logical",
+      "dados 2logical",
+      "envio mensal 2logical",
+      "navapp01 2logical",
+      "aplicação 2logical",
+      "2logical ap mds",
+      "como enviar dados 2logical",
+      "não enviei 2logical",
+      "processo 2logical mensal",
+      "2logical não atualizado"
+    ]
   }
 ];
