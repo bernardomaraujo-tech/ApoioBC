@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Assistente Business Central</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="chat-wrapper">
+    <div id="avatar-container">
+      <img id="alberto" src="assets/alberto.png" alt="Alberto" />
+    </div>
+
+    <div id="chat-area" class="hidden"></div>
+
+    <div id="composer-area">
+      <div id="input-container">
+        <input
+          type="text"
+          id="question-input"
+          placeholder="Faz a tua pergunta..."
+          autocomplete="off"
+        />
+        <button id="ask-btn" type="button">Perguntar</button>
+        <button id="clear-btn" type="button">Limpar</button>
+      </div>
+
+      <div id="suggestions-box" class="suggestions hidden"></div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/fuse.js@6.6.2/dist/fuse.min.js"></script>
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
