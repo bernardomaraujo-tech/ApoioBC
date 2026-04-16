@@ -1239,7 +1239,9 @@ export const KNOWLEDGE_BASE = [
         "Abrir o documento e identificar as linhas sem Código Departamento.",
         "Confirmar o valor correto a aplicar a cada linha."
       ],
-      validation: ["O pedido passa a ser enviado sem erro."],
+      validation: [
+        "O pedido passa a ser enviado sem erro."
+      ],
       escalation:
         "Se o campo voltar a ficar vazio automaticamente, validar a origem da criação do documento e herança de dimensões.",
       relatedCases: ["DIM-001", "TRA-003"]
@@ -1547,6 +1549,217 @@ export const KNOWLEDGE_BASE = [
       escalation:
         "Se a aplicação não existir, não abrir ou falhar, escalar para IT.",
       relatedCases: []
+    }
+  },
+
+  {
+    id: "AGT-001",
+    title: "Comunicação de Faturas à AGT",
+    category: "AGT",
+    aliases: [
+      "comunicar faturas agt",
+      "agt faturas venda",
+      "enviar faturas agt",
+      "estado agt faturas",
+      "faturas venda registadas agt",
+      "obter estado faturas agt"
+    ],
+    keywords: ["agt", "faturas", "comunicação", "angola", "estado agt"],
+    errorPatterns: [],
+    common: {
+      problem:
+        "É necessário comunicar faturas registadas à AGT e validar o estado da comunicação.",
+      solution:
+        "Executar a fila de tarefas e usar as ações de comunicar documento e obter estado nas faturas registadas.",
+      steps: [
+        "Abrir a pesquisa do Business Central.",
+        "Procurar por Movs. Fila Tarefas.",
+        "Localizar a tarefa do processo AGT.",
+        "Confirmar ID Objeto a Executar = 50525 e legenda AP_Send_FE.",
+        "Selecionar a linha e clicar em Correr uma vez (em primeiro plano).",
+        "Procurar por Faturas Venda Registadas.",
+        "Filtrar Data Registo pela data pretendida.",
+        "Deixar Estado AGT em branco.",
+        "Selecionar os documentos.",
+        "Ir a Ações > Fatura > Comunicar Documento AGT.",
+        "Aguardar o processamento.",
+        "Voltar a filtrar os documentos com Estado AGT = Pendente e Código AGT = ''.",
+        "Selecionar os documentos e executar Ações > Fatura > Obter Estado AGT."
+      ],
+      notes: [
+        "Depois de comunicadas, as faturas deixam normalmente de aparecer no filtro inicial.",
+        "Estados possíveis: Pendente, Aceite, Rejeitado."
+      ]
+    },
+    agentOnly: {
+      context:
+        "Processo manual de comunicação fiscal eletrónica de faturas à AGT no Business Central Australpharma.",
+      cause:
+        "As faturas ainda não foram comunicadas ou o estado ainda não foi atualizado no sistema.",
+      diagnosis: [
+        "Validar se a tarefa AP_Send_FE foi executada.",
+        "Confirmar se Data Registo e Estado AGT foram corretamente filtrados.",
+        "Confirmar que o documento ainda não tem Nº AGT nem estado Aceite."
+      ],
+      validation: [
+        "Os documentos deixam de estar com Estado AGT vazio.",
+        "Os estados passam a refletir Pendente, Aceite ou Rejeitado conforme o retorno."
+      ],
+      escalation:
+        "Se a comunicação falhar, validar a fila de tarefas, filtros aplicados, e se o documento já foi anteriormente comunicado.",
+      relatedCases: ["AGT-002", "AGT-003", "AGT-004"]
+    }
+  },
+  {
+    id: "AGT-002",
+    title: "Comunicação de Notas de Crédito à AGT",
+    category: "AGT",
+    aliases: [
+      "comunicar notas crédito agt",
+      "agt notas crédito",
+      "enviar notas crédito agt",
+      "obter estado notas crédito agt"
+    ],
+    keywords: ["agt", "notas crédito", "comunicação", "estado agt"],
+    errorPatterns: [],
+    common: {
+      problem:
+        "É necessário comunicar notas de crédito registadas à AGT e validar o estado da comunicação.",
+      solution:
+        "Executar a comunicação nas notas de crédito registadas e depois obter o respetivo estado.",
+      steps: [
+        "Procurar por Notas de Crédito Registadas.",
+        "Filtrar Data Registo pela data pretendida.",
+        "Deixar Estado AGT em branco.",
+        "Selecionar os documentos.",
+        "Ir a Ações > Nota de Crédito > Comunicar Documento AGT.",
+        "Aguardar o processamento.",
+        "Filtrar os documentos com Estado AGT = Pendente e Código AGT = ''.",
+        "Selecionar os documentos.",
+        "Executar Ações > Nota de Crédito > Obter Estado AGT."
+      ],
+      notes: [
+        "O processo é equivalente ao das faturas, mas aplicado às notas de crédito."
+      ]
+    },
+    agentOnly: {
+      context:
+        "Processo manual de comunicação eletrónica de notas de crédito à AGT.",
+      cause:
+        "As notas de crédito ainda não foram submetidas ou o retorno ainda não foi atualizado.",
+      diagnosis: [
+        "Confirmar que os documentos estão na lista correta.",
+        "Validar filtros de Data Registo e Estado AGT.",
+        "Confirmar ausência de Nº AGT antes da comunicação."
+      ],
+      validation: [
+        "Os documentos passam a apresentar estado AGT atualizado."
+      ],
+      escalation:
+        "Se falhar, validar se o documento já foi comunicado e se o processamento prévio AGT foi executado.",
+      relatedCases: ["AGT-001", "AGT-004"]
+    }
+  },
+  {
+    id: "AGT-003",
+    title: "Comunicação de Recibos à AGT",
+    category: "AGT",
+    aliases: [
+      "comunicar recibos agt",
+      "agt recibos",
+      "recibos eletrónicos agt",
+      "obter estado recibos agt",
+      "ptss fe document"
+    ],
+    keywords: ["agt", "recibos", "ptss fe document", "comunicação", "estado agt"],
+    errorPatterns: [],
+    common: {
+      problem:
+        "É necessário comunicar recibos registados à AGT e confirmar o respetivo estado.",
+      solution:
+        "Filtrar os recibos eletrónicos elegíveis e executar a ação de comunicação seguida da obtenção de estado.",
+      steps: [
+        "Abrir a pesquisa do Business Central.",
+        "Procurar por Recibos.",
+        "Entrar na lista.",
+        "Filtrar PTSS FE Document = Sim.",
+        "Deixar Estado AGT em branco.",
+        "Selecionar os recibos pretendidos.",
+        "Ir a Ações > Novo Documento > Comunicar Documento AGT.",
+        "Aguardar o processamento.",
+        "Filtrar os recibos com Estado AGT = Pendente e Código AGT = ''.",
+        "Selecionar os documentos.",
+        "Executar Ações > Obter Estado AGT."
+      ],
+      notes: [
+        "Depois da comunicação, o Estado AGT é atualizado e o Nº Documento AGT pode ser preenchido."
+      ]
+    },
+    agentOnly: {
+      context:
+        "Aplicável a recibos registados que tenham a flag eletrónica ativa para comunicação à AGT.",
+      cause:
+        "Os recibos ainda não foram comunicados ou não têm as condições mínimas para comunicação.",
+      diagnosis: [
+        "Confirmar PTSS FE Document = Sim.",
+        "Validar se Estado AGT está em branco antes da comunicação.",
+        "Confirmar que o recibo ainda não tem Nº Documento AGT."
+      ],
+      validation: [
+        "Os recibos passam a apresentar Estado AGT.",
+        "O Nº Documento AGT fica preenchido quando aplicável."
+      ],
+      escalation:
+        "Se não comunicar, validar flag eletrónica, filtros aplicados e configuração AGT do documento.",
+      relatedCases: ["AGT-001", "AGT-004"]
+    }
+  },
+  {
+    id: "AGT-004",
+    title: "Validações antes de comunicar documentos à AGT",
+    category: "AGT",
+    aliases: [
+      "validações agt",
+      "erros comunicação agt",
+      "documentos já comunicados agt",
+      "duplicação agt",
+      "filtros agt"
+    ],
+    keywords: ["agt", "validação", "erros", "duplicação", "filtros"],
+    errorPatterns: [],
+    common: {
+      problem:
+        "Podem ocorrer erros, duplicações ou comunicações indevidas se os documentos forem enviados sem validação prévia.",
+      solution:
+        "Validar sempre os campos e filtros essenciais antes de comunicar documentos à AGT.",
+      steps: [
+        "Confirmar PTSS FE Document = Sim, quando aplicável.",
+        "Garantir que o documento não tem Nº AGT.",
+        "Verificar que o Estado AGT não está já como Aceite.",
+        "Confirmar que os filtros aplicados correspondem apenas aos documentos pretendidos.",
+        "Evitar comunicação em massa sem validação prévia da lista."
+      ],
+      notes: [
+        "Erros comuns: documentos já comunicados, recibos sem flag eletrónica e filtros mal aplicados."
+      ]
+    },
+    agentOnly: {
+      context:
+        "Camada de controlo para evitar falhas funcionais na comunicação eletrónica à AGT.",
+      cause:
+        "Envio de documentos já processados, elegibilidade incorreta ou filtros indevidos.",
+      diagnosis: [
+        "Validar Estado AGT e Nº AGT antes de comunicar.",
+        "Confirmar se o documento é eletrónico e elegível.",
+        "Rever os filtros antes de executar ações em massa."
+      ],
+      validation: [
+        "A comunicação decorre sem duplicações.",
+        "Só são enviados os documentos corretos."
+      ],
+      escalation:
+        "Se persistirem erros mesmo após validação, rever logs da integração e configuração AGT.",
+      relatedCases: ["AGT-001", "AGT-002", "AGT-003"]
     }
   },
 
@@ -1886,7 +2099,7 @@ export const KNOWLEDGE_BASE = [
         "Validar comportamento standard antes de criar template logic.",
         "Confirmar se o campo já é calculado pelo sistema."
       ],
-      validation: [
+     validation: [
         "A lógica fica simplificada e sem duplicação desnecessária."
       ],
       escalation:
