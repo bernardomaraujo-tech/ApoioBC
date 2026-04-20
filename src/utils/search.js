@@ -8,70 +8,50 @@ function normalizeText(value = "") {
     .trim();
 }
 
-function containsPhrase(text, phrase) {
-  return text.includes(phrase);
-}
-
-export function getSearchIndex(item) {
-  const parts = [
+function buildIndex(item) {
+  return normalizeText([
     item.title,
+    item.product,
     item.category,
-    ...(item.aliases || []),
-    ...(item.keywords || []),
-    ...(item.errorPatterns || []),
-    item.common?.problem,
-    item.common?.solution,
-    item.agentOnly?.context,
-    item.agentOnly?.cause,
-  ];
-
-  return normalizeText(parts.filter(Boolean).join(" | "));
+    item.context,
+    item.cause,
+    item.solution,
+    ...(item.diagnosis || []),
+    ...(item.steps || []),
+    ...(item.validation || []),
+    ...(item.notes || []),
+  ].filter(Boolean).join(" | "));
 }
 
-export function scoreItem(item, query) {
+function scoreItem(item, query) {
   const normalizedQuery = normalizeText(query);
-  const index = getSearchIndex(item);
-
   if (!normalizedQuery) return 0;
 
+  const index = buildIndex(item);
+  const words = normalizedQuery.split(" ").filter(Boolean);
   let score = 0;
 
-  if (containsPhrase(index, normalizedQuery)) score += 120;
+  if (index.includes(normalizedQuery)) score += 140;
+  if (normalizeText(item.title).includes(normalizedQuery)) score += 160;
 
-  for (const alias of item.aliases || []) {
-    const a = normalizeText(alias);
-    if (a && containsPhrase(normalizedQuery, a)) score += 80;
-    if (a && containsPhrase(index, a) && containsPhrase(normalizedQuery, a.split(" ")[0])) score += 15;
-  }
-
-  for (const pattern of item.errorPatterns || []) {
-    const p = normalizeText(pattern);
-    if (p && containsPhrase(normalizedQuery, p)) score += 140;
-  }
-
-  const words = normalizedQuery.split(" ").filter(Boolean);
   for (const word of words) {
     if (word.length < 2) continue;
-    if (containsPhrase(normalizeText(item.title), word)) score += 22;
-    if ((item.keywords || []).some((k) => normalizeText(k) === word)) score += 20;
-    if (containsPhrase(index, word)) score += 6;
+    if (normalizeText(item.title).includes(word)) score += 28;
+    if (normalizeText(item.category).includes(word)) score += 20;
+    if (normalizeText(item.product).includes(word)) score += 16;
+    if (index.includes(word)) score += 8;
   }
 
   return score;
 }
 
-export function searchKnowledgeBase(items, query) {
+export function getVisibleCases(items, profile) {
+  return items.filter((item) => item.visibility?.[profile]);
+}
+
+export function searchSupportCases(items, query) {
   return [...items]
     .map((item) => ({ item, score: scoreItem(item, query) }))
     .filter((entry) => entry.score > 0)
-    .sort((a, b) => b.score - a.score);
-}
-
-export function getRelatedCases(items, caseIds = []) {
-  const lookup = new Map(items.map((item) => [item.id, item]));
-  return caseIds.map((id) => lookup.get(id)).filter(Boolean);
-}
-
-export function normalizeForUi(value = "") {
-  return normalizeText(value);
+    .sort((a, b) => b.score - a.score || a.item.title.localeCompare(b.item.title));
 }
