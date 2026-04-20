@@ -1,19 +1,19 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
+  Bot,
   CheckCircle2,
   ChevronRight,
   Copy,
-  Filter,
   Info,
-  RefreshCw,
   Search,
   Shield,
+  Sparkles,
   User,
-  Wrench
+  Wrench,
 } from "lucide-react";
-import { KNOWLEDGE_BASE } from "./data/knowledgeBase.js";
-import { getRelatedCases, searchKnowledgeBase } from "./utils/search.js";
+import { SUPPORT_CASES } from "./data/supportCases.js";
+import { getVisibleCases, searchSupportCases } from "./utils/search.js";
 import {
   getStoredProfile,
   getStoredQuery,
@@ -21,87 +21,137 @@ import {
   setStoredQuery,
 } from "./utils/storage.js";
 
-function ProfileSelector({ profile, onChange }) {
+const INTRO_MESSAGE = [
+  "Olá eu sou o Alberto!",
+  "Para te poder ajudar da melhor forma, podes dizer-me se és:",
+];
+
+const PROFILE_CONFIRMATION = [
+  "Em função desta resposta a resposta à questão seguinte vai ser condicionada.",
+  "Como te posso ajudar?",
+];
+
+const SUGGESTIONS = [
+  "erro OCR vírgula casas decimais",
+  "não consigo aprovar uma encomenda",
+  "template não identificado",
+  "erro data de registo ao faturar",
+  "série AGT não comunicada",
+  "lista de preços com erro",
+];
+
+function Typewriter({ lines, onDone, speed = 24, lineDelay = 420, startKey }) {
+  const [displayed, setDisplayed] = useState([]);
+
+  useEffect(() => {
+    let active = true;
+    let timeoutId;
+
+    async function run() {
+      const result = [];
+      for (const line of lines) {
+        let current = "";
+        result.push(current);
+        setDisplayed([...result]);
+
+        for (const char of line) {
+          if (!active) return;
+          current += char;
+          result[result.length - 1] = current;
+          setDisplayed([...result]);
+          await new Promise((resolve) => {
+            timeoutId = window.setTimeout(resolve, speed);
+          });
+        }
+
+        await new Promise((resolve) => {
+          timeoutId = window.setTimeout(resolve, lineDelay);
+        });
+      }
+
+      if (active && onDone) onDone();
+    }
+
+    run();
+
+    return () => {
+      active = false;
+      window.clearTimeout(timeoutId);
+    };
+  }, [lines, onDone, speed, lineDelay, startKey]);
+
   return (
-    <section className="profile-block">
-      <p className="eyebrow">BC Support</p>
-      <h1>Como te identificas?</h1>
-      <p className="subtitle">
-        Escolhe o perfil para ajustar o tom e o nível de detalhe das respostas.
-      </p>
-
-      <div className="profile-grid">
-        <button
-          className={profile === "agent" ? "profile-card active" : "profile-card"}
-          onClick={() => onChange("agent")}
-          type="button"
-        >
-          <div className="profile-icon"><Shield size={22} /></div>
-          <div>
-            <strong>Agente de Apoio</strong>
-            <p>Respostas detalhadas com diagnóstico, validação e escalamento.</p>
-          </div>
-        </button>
-
-        <button
-          className={profile === "user" ? "profile-card active" : "profile-card"}
-          onClick={() => onChange("user")}
-          type="button"
-        >
-          <div className="profile-icon"><User size={22} /></div>
-          <div>
-            <strong>Utilizador</strong>
-            <p>Respostas simples, diretas e orientadas ao que fazer.</p>
-          </div>
-        </button>
-      </div>
-    </section>
+    <div className="assistant-lines">
+      {displayed.map((line, index) => (
+        <p key={`${startKey}-${index}`}>
+          {line}
+          {index === displayed.length - 1 ? <span className="caret">|</span> : null}
+        </p>
+      ))}
+    </div>
   );
 }
 
-function SearchBar({ query, setQuery, onSearch, onReset }) {
+function ProfileButtons({ profile, onSelect, visible }) {
+  if (!visible) return null;
+
   return (
-    <section className="search-shell">
-      <div className="search-input-wrap">
+    <div className="choice-grid">
+      <button
+        type="button"
+        className={profile === "agent" ? "choice-card active" : "choice-card"}
+        onClick={() => onSelect("agent")}
+      >
+        <div className="choice-icon"><Shield size={20} /></div>
+        <div>
+          <strong>Agente de Apoio</strong>
+          <p>Diagnóstico, validação, contexto e detalhe técnico.</p>
+        </div>
+      </button>
+
+      <button
+        type="button"
+        className={profile === "user" ? "choice-card active" : "choice-card"}
+        onClick={() => onSelect("user")}
+      >
+        <div className="choice-icon"><User size={20} /></div>
+        <div>
+          <strong>Utilizador</strong>
+          <p>Resposta direta, simples e focada no que fazer.</p>
+        </div>
+      </button>
+    </div>
+  );
+}
+
+function SearchComposer({ query, setQuery, onSearch, enabled }) {
+  return (
+    <div className={enabled ? "composer" : "composer disabled"}>
+      <div className="composer-input-wrap">
         <Search size={18} />
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Descreve a tua dúvida ou cola a mensagem de erro"
+          placeholder="Escreve a tua questão"
+          disabled={!enabled}
           onKeyDown={(e) => {
-            if (e.key === "Enter") onSearch();
+            if (enabled && e.key === "Enter") onSearch();
           }}
         />
       </div>
-
-      <div className="search-actions">
-        <button className="btn btn-primary" onClick={onSearch} type="button">
-          <Search size={16} />
-          Pesquisar
-        </button>
-
-        <button className="btn btn-secondary" onClick={onReset} type="button">
-          <RefreshCw size={16} />
-          Limpar
-        </button>
-      </div>
-    </section>
+      <button type="button" className="btn btn-primary" onClick={onSearch} disabled={!enabled}>
+        Pesquisar
+      </button>
+    </div>
   );
 }
 
-function SuggestionChips({ onPick }) {
-  const suggestions = [
-    "não consigo aprovar uma encomenda",
-    "erro tipo lista preços e descontos não pode ser utilizado",
-    "erro data de registo ao faturar",
-    "dimensão padrão não existe",
-    "erro e-mail tem que ter um valor em vendedor",
-    "suplemento excel business central não funciona"
-  ];
+function SuggestionChips({ onPick, visible }) {
+  if (!visible) return null;
 
   return (
     <div className="chips">
-      {suggestions.map((item) => (
+      {SUGGESTIONS.map((item) => (
         <button key={item} className="chip" type="button" onClick={() => onPick(item)}>
           {item}
         </button>
@@ -110,21 +160,27 @@ function SuggestionChips({ onPick }) {
   );
 }
 
-function ResultList({ results, selectedId, onSelect }) {
+function ResultList({ results, selectedId, onSelect, profile }) {
   return (
-    <aside className="sidebar-card">
-      <div className="sidebar-header">
+    <aside className="panel sidebar-panel">
+      <div className="panel-head">
         <div>
           <p className="eyebrow">Resultados</p>
-          <h2>Casos encontrados</h2>
+          <h2>{results.length ? "Casos encontrados" : "Sem resultados"}</h2>
         </div>
-        <span className="result-count">{results.length}</span>
+        <span className="pill">{results.length}</span>
       </div>
 
+      <p className="panel-note">
+        {profile === "agent"
+          ? "Estás a ver os casos disponíveis para agente de apoio."
+          : "Estás a ver apenas os casos disponíveis para utilizador."}
+      </p>
+
       {results.length === 0 ? (
-        <div className="empty-state small">
+        <div className="empty-box small">
           <AlertCircle size={18} />
-          <p>Sem resultados ainda. Faz uma pesquisa para ver casos relacionados.</p>
+          <p>Faz uma pesquisa para mostrar os apoios disponíveis para este perfil.</p>
         </div>
       ) : (
         <div className="result-list">
@@ -135,12 +191,12 @@ function ResultList({ results, selectedId, onSelect }) {
               className={selectedId === item.id ? "result-item active" : "result-item"}
               onClick={() => onSelect(item.id)}
             >
-              <div className="result-meta">
-                <span className="category">{item.category}</span>
+              <div className="result-top">
+                <span className="tag">{item.product}</span>
                 <span className="score">score {score}</span>
               </div>
               <strong>{item.title}</strong>
-              <p>{item.common.problem}</p>
+              <p>{item.solution}</p>
             </button>
           ))}
         </div>
@@ -152,192 +208,153 @@ function ResultList({ results, selectedId, onSelect }) {
 function Section({ icon, title, children }) {
   if (!children) return null;
   return (
-    <section className="answer-section">
-      <div className="section-title">
+    <section className="detail-section">
+      <div className="detail-title">
         {icon}
         <h3>{title}</h3>
       </div>
-      <div className="section-content">{children}</div>
+      <div className="detail-body">{children}</div>
     </section>
   );
 }
 
-function BulletList({ items }) {
+function BulletList({ items, ordered = false }) {
   if (!items || items.length === 0) return null;
+  const ListTag = ordered ? "ol" : "ul";
   return (
-    <ul className="bullet-list">
-      {items.map((item, idx) => (
-        <li key={`${item}-${idx}`}>{item}</li>
+    <ListTag className={ordered ? "ordered-list" : "bullet-list"}>
+      {items.map((item, index) => (
+        <li key={`${item}-${index}`}>{item}</li>
       ))}
-    </ul>
+    </ListTag>
   );
 }
 
-function buildCopyText(item, profile, related) {
+function buildCopyText(item, profile) {
   const lines = [];
   lines.push(item.title);
   lines.push("");
-
-  lines.push("Problema:");
-  lines.push(item.common.problem);
+  lines.push(`Produto: ${item.product}`);
+  lines.push(`Categoria: ${item.category}`);
   lines.push("");
 
-  if (profile === "agent" && item.agentOnly?.context) {
+  if (item.context) {
     lines.push("Contexto:");
-    lines.push(item.agentOnly.context);
+    lines.push(item.context);
     lines.push("");
   }
 
-  if (profile === "agent" && item.agentOnly?.cause) {
+  if (profile === "agent" && item.cause) {
     lines.push("Causa provável:");
-    lines.push(item.agentOnly.cause);
+    lines.push(item.cause);
     lines.push("");
   }
 
-  lines.push("Solução:");
-  lines.push(item.common.solution);
-  lines.push("");
+  if (profile === "agent" && item.diagnosis?.length) {
+    lines.push("Como validar diagnóstico:");
+    item.diagnosis.forEach((entry, index) => lines.push(`${index + 1}. ${entry}`));
+    lines.push("");
+  }
 
-  if (item.common.steps?.length) {
+  if (item.solution) {
+    lines.push("Solução:");
+    lines.push(item.solution);
+    lines.push("");
+  }
+
+  if (item.steps?.length) {
     lines.push("Como proceder:");
-    item.common.steps.forEach((step, index) => lines.push(`${index + 1}. ${step}`));
+    item.steps.forEach((entry, index) => lines.push(`${index + 1}. ${entry}`));
     lines.push("");
   }
 
-  if (profile === "agent" && item.agentOnly?.diagnosis?.length) {
-    lines.push("Como validar o diagnóstico:");
-    item.agentOnly.diagnosis.forEach((step, index) => lines.push(`${index + 1}. ${step}`));
-    lines.push("");
-  }
-
-  if (profile === "agent" && item.agentOnly?.validation?.length) {
+  if (item.validation?.length) {
     lines.push("Validação final:");
-    item.agentOnly.validation.forEach((step, index) => lines.push(`${index + 1}. ${step}`));
+    item.validation.forEach((entry, index) => lines.push(`${index + 1}. ${entry}`));
     lines.push("");
   }
 
-  if (item.common.notes?.length) {
+  if (item.notes?.length) {
     lines.push("Notas:");
-    item.common.notes.forEach((note, index) => lines.push(`${index + 1}. ${note}`));
-    lines.push("");
-  }
-
-  if (profile === "agent" && item.agentOnly?.escalation) {
-    lines.push("Quando escalar:");
-    lines.push(item.agentOnly.escalation);
-    lines.push("");
-  }
-
-  if (related.length) {
-    lines.push("Casos relacionados:");
-    related.forEach((r) => lines.push(`- ${r.title}`));
+    item.notes.forEach((entry, index) => lines.push(`${index + 1}. ${entry}`));
   }
 
   return lines.join("\n");
 }
 
-function AnswerCard({ item, profile, related }) {
+function DetailCard({ item, profile }) {
   const [copied, setCopied] = useState(false);
 
   if (!item) {
     return (
-      <div className="answer-card empty">
-        <div className="empty-state">
-          <Info size={22} />
+      <section className="panel detail-panel empty-panel">
+        <div className="empty-box">
+          <Info size={20} />
           <div>
-            <h2>Sem resposta selecionada</h2>
-            <p>Pesquisa um tema ou escolhe um dos resultados para veres a resposta completa.</p>
+            <h2>Nenhum caso selecionado</h2>
+            <p>Depois de pesquisares, escolhe um resultado para veres o detalhe completo.</p>
           </div>
         </div>
-      </div>
+      </section>
     );
   }
 
   async function handleCopy() {
-    const text = buildCopyText(item, profile, related);
-    await navigator.clipboard.writeText(text);
+    await navigator.clipboard.writeText(buildCopyText(item, profile));
     setCopied(true);
-    window.setTimeout(() => setCopied(false), 1800);
+    window.setTimeout(() => setCopied(false), 1600);
   }
 
   return (
-    <article className="answer-card">
-      <div className="answer-header">
+    <section className="panel detail-panel">
+      <div className="panel-head detail-head">
         <div>
-          <div className="header-row">
-            <span className="category-badge">{item.category}</span>
-            <span className="mode-badge">{profile === "agent" ? "Modo Agente" : "Modo Utilizador"}</span>
+          <div className="badges-row">
+            <span className="tag">{item.product}</span>
+            <span className="tag soft">{item.category}</span>
+            <span className="tag soft">{profile === "agent" ? "Modo Agente" : "Modo Utilizador"}</span>
           </div>
           <h2>{item.title}</h2>
         </div>
 
-        <button className="btn btn-secondary" onClick={handleCopy} type="button">
+        <button className="btn btn-secondary" type="button" onClick={handleCopy}>
           <Copy size={16} />
-          {copied ? "Copiado" : "Copiar resposta"}
+          {copied ? "Copiado" : "Copiar"}
         </button>
       </div>
 
-      <Section icon={<AlertCircle size={18} />} title="Problema">
-        <p>{item.common.problem}</p>
+      <Section icon={<Info size={18} />} title="Contexto">
+        <p>{item.context || "Sem contexto adicional."}</p>
       </Section>
 
       {profile === "agent" && (
-        <>
-          <Section icon={<Info size={18} />} title="Contexto">
-            <p>{item.agentOnly?.context}</p>
-          </Section>
+        <Section icon={<AlertCircle size={18} />} title="Causa provável">
+          <p>{item.cause || "Sem causa registada."}</p>
+        </Section>
+      )}
 
-          <Section icon={<Filter size={18} />} title="Causa provável">
-            <p>{item.agentOnly?.cause}</p>
-          </Section>
-
-          <Section icon={<Search size={18} />} title="Como validar o diagnóstico">
-            <BulletList items={item.agentOnly?.diagnosis} />
-          </Section>
-        </>
+      {profile === "agent" && (
+        <Section icon={<Search size={18} />} title="Como validar diagnóstico">
+          <BulletList items={item.diagnosis} />
+        </Section>
       )}
 
       <Section icon={<Wrench size={18} />} title="Solução">
-        <p>{item.common.solution}</p>
+        <p>{item.solution || "Sem solução registada."}</p>
       </Section>
 
       <Section icon={<ChevronRight size={18} />} title="Como proceder">
-        <ol className="number-list">
-          {item.common.steps.map((step, index) => (
-            <li key={`${step}-${index}`}>{step}</li>
-          ))}
-        </ol>
+        <BulletList items={item.steps} ordered />
       </Section>
 
-      {profile === "agent" && (
-        <Section icon={<CheckCircle2 size={18} />} title="Validação final">
-          <BulletList items={item.agentOnly?.validation} />
-        </Section>
-      )}
-
-      <Section icon={<Info size={18} />} title="Notas">
-        <BulletList items={item.common.notes} />
+      <Section icon={<CheckCircle2 size={18} />} title="Validação final">
+        <BulletList items={item.validation} />
       </Section>
 
-      {profile === "agent" && (
-        <Section icon={<AlertCircle size={18} />} title="Quando escalar">
-          <p>{item.agentOnly?.escalation}</p>
-        </Section>
-      )}
-
-      {related.length > 0 && (
-        <Section icon={<ChevronRight size={18} />} title="Casos relacionados">
-          <div className="related-list">
-            {related.map((relatedItem) => (
-              <div className="related-card" key={relatedItem.id}>
-                <span>{relatedItem.category}</span>
-                <strong>{relatedItem.title}</strong>
-              </div>
-            ))}
-          </div>
-        </Section>
-      )}
-    </article>
+      <Section icon={<Sparkles size={18} />} title="Notas">
+        <BulletList items={item.notes} />
+      </Section>
+    </section>
   );
 }
 
@@ -346,38 +363,53 @@ export default function App() {
   const [query, setQuery] = useState(getStoredQuery());
   const [submittedQuery, setSubmittedQuery] = useState(getStoredQuery());
   const [selectedId, setSelectedId] = useState(null);
-
-  useEffect(() => setStoredProfile(profile), [profile]);
-  useEffect(() => setStoredQuery(query), [query]);
-
-  const results = useMemo(() => {
-    return submittedQuery ? searchKnowledgeBase(KNOWLEDGE_BASE, submittedQuery) : [];
-  }, [submittedQuery]);
+  const [introDone, setIntroDone] = useState(false);
+  const [profileFlowDone, setProfileFlowDone] = useState(Boolean(getStoredProfile()));
+  const [typingPhase, setTypingPhase] = useState(getStoredProfile() ? "complete" : "intro");
+  const resultsRef = useRef(null);
 
   useEffect(() => {
-    if (results.length > 0) setSelectedId(results[0].item.id);
-    else setSelectedId(null);
-  }, [submittedQuery]);
+    if (profile) {
+      setStoredProfile(profile);
+    }
+  }, [profile]);
+
+  useEffect(() => {
+    setStoredQuery(query);
+  }, [query]);
+
+  const visibleCases = useMemo(() => getVisibleCases(SUPPORT_CASES, profile), [profile]);
+
+  const results = useMemo(() => {
+    if (!submittedQuery) return [];
+    return searchSupportCases(visibleCases, submittedQuery);
+  }, [visibleCases, submittedQuery]);
 
   const selectedItem = useMemo(() => {
     return results.find((entry) => entry.item.id === selectedId)?.item || null;
   }, [results, selectedId]);
 
-  const related = useMemo(() => {
-    return selectedItem ? getRelatedCases(KNOWLEDGE_BASE, selectedItem.agentOnly?.relatedCases || []) : [];
-  }, [selectedItem]);
+  useEffect(() => {
+    if (results.length > 0) {
+      setSelectedId(results[0].item.id);
+      resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    } else {
+      setSelectedId(null);
+    }
+  }, [submittedQuery, results.length]);
+
+  function handleProfileSelection(nextProfile) {
+    setProfile(nextProfile);
+    setProfileFlowDone(true);
+    setTypingPhase("profile-confirmation");
+  }
 
   function handleSearch() {
-    setSubmittedQuery(query.trim());
+    const finalQuery = query.trim();
+    setSubmittedQuery(finalQuery);
   }
 
-  function handleReset() {
-    setQuery("");
-    setSubmittedQuery("");
-    setSelectedId(null);
-  }
-
-  function handlePickSuggestion(value) {
+  function handleSuggestion(value) {
     setQuery(value);
     setSubmittedQuery(value);
   }
@@ -385,20 +417,96 @@ export default function App() {
   return (
     <div className="app-shell">
       <div className="app-container">
-        <ProfileSelector profile={profile} onChange={setProfile} />
+        <section className="hero-chat panel">
+          <div className="hero-top">
+            <div className="assistant-avatar"><Bot size={20} /></div>
+            <div>
+              <p className="eyebrow">BC Support</p>
+              <h1>Assistente de apoio</h1>
+            </div>
+          </div>
 
-        <SearchBar
-          query={query}
-          setQuery={setQuery}
-          onSearch={handleSearch}
-          onReset={handleReset}
-        />
+          <div className="chat-bubble assistant">
+            {typingPhase === "intro" && (
+              <Typewriter
+                lines={INTRO_MESSAGE}
+                startKey="intro"
+                onDone={() => {
+                  setIntroDone(true);
+                  if (!profileFlowDone) return;
+                  setTypingPhase("complete");
+                }}
+              />
+            )}
 
-        <SuggestionChips onPick={handlePickSuggestion} />
+            {typingPhase !== "intro" && (
+              <div className="assistant-lines static">
+                {INTRO_MESSAGE.map((line) => <p key={line}>{line}</p>)}
+              </div>
+            )}
+          </div>
 
-        <div className="content-grid">
-          <ResultList results={results} selectedId={selectedId} onSelect={setSelectedId} />
-          <AnswerCard item={selectedItem} profile={profile} related={related} />
+          <ProfileButtons
+            profile={profile}
+            onSelect={handleProfileSelection}
+            visible={introDone || typingPhase !== "intro"}
+          />
+
+          {profileFlowDone && (
+            <div className="chat-bubble user-choice">
+              <span>Perfil selecionado:</span>
+              <strong>{profile === "agent" ? "Agente de Apoio" : "Utilizador"}</strong>
+            </div>
+          )}
+
+          {typingPhase === "profile-confirmation" && (
+            <div className="chat-bubble assistant">
+              <Typewriter
+                lines={PROFILE_CONFIRMATION}
+                startKey="profile-confirmation"
+                onDone={() => setTypingPhase("complete")}
+              />
+            </div>
+          )}
+
+          {typingPhase === "complete" && profileFlowDone && (
+            <>
+              <div className="chat-bubble assistant">
+                <div className="assistant-lines static">
+                  {PROFILE_CONFIRMATION.map((line) => <p key={line}>{line}</p>)}
+                </div>
+              </div>
+
+              <SearchComposer
+                query={query}
+                setQuery={setQuery}
+                onSearch={handleSearch}
+                enabled={true}
+              />
+            </>
+          )}
+        </section>
+
+        <SuggestionChips onPick={handleSuggestion} visible={typingPhase === "complete"} />
+
+        <div className="stats-row">
+          <div className="stat-card">
+            <strong>{SUPPORT_CASES.length}</strong>
+            <span>casos carregados do Excel</span>
+          </div>
+          <div className="stat-card">
+            <strong>{visibleCases.length}</strong>
+            <span>casos visíveis neste perfil</span>
+          </div>
+          <div className="stat-card">
+            <strong>{profile === "agent" ? "Agente" : "Utilizador"}</strong>
+            <span>modo ativo</span>
+          </div>
+        </div>
+
+        <div className="content-grid" ref={resultsRef}>
+          <ResultList results={results} selectedId={selectedId} onSelect={setSelectedId} profile={profile} />
+          <DetailCard item={selectedItem} profile={profile} />
         </div>
       </div>
     </div>
